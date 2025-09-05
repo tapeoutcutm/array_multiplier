@@ -3,13 +3,20 @@ from cocotb.triggers import RisingEdge, Timer
 
 
 async def reset_dut(dut, cycles=5):
-    """Reset helper."""
+    """Reset helper (hold reset for a few cycles)."""
     dut.rst_n.value = 0
-    await Timer(1, units="ns")
     for _ in range(cycles):
         await RisingEdge(dut.clk)
     dut.rst_n.value = 1
-    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)  # let logic settle
+
+
+def safe_int(sig):
+    """Convert cocotb signal to int, handling X/Z safely."""
+    val = sig.value
+    if not val.is_resolvable:
+        return 0
+    return int(val)
 
 
 @cocotb.test()
@@ -32,39 +39,43 @@ async def test_mac_spst_basic(dut):
 
     cocotb.start_soon(clk_gen())
 
-    # Reset
+    # Reset DUT
     await reset_dut(dut)
 
     # --- Test 1: Multiply 3 * 4 ---
     dut.ui_in.value = 3
     dut.uio_in.value = 4
-    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)   # capture inputs
+    await RisingEdge(dut.clk)   # accumulator updates
 
-    acc1 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    acc1 = (safe_int(dut.uio_out) << 8) | safe_int(dut.uo_out)
     assert acc1 == 12, f"Expected 12, got {acc1}"
 
     # --- Test 2: Add 2 * 5 ---
     dut.ui_in.value = 2
     dut.uio_in.value = 5
     await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
 
-    acc2 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    acc2 = (safe_int(dut.uio_out) << 8) | safe_int(dut.uo_out)
     assert acc2 == 12 + 10, f"Expected 22, got {acc2}"
 
     # --- Test 3: Add 10 * 10 ---
     dut.ui_in.value = 10
     dut.uio_in.value = 10
     await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
 
-    acc3 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    acc3 = (safe_int(dut.uio_out) << 8) | safe_int(dut.uo_out)
     assert acc3 == 22 + 100, f"Expected 122, got {acc3}"
 
     # --- Test 4: Disable accumulation and load external high byte ---
     dut.ena.value = 0
     dut.uio_in.value = 0x55
     await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
 
-    acc4 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    acc4 = (safe_int(dut.uio_out) << 8) | safe_int(dut.uo_out)
     assert (acc4 >> 8) == 0x55, f"Expected high byte 0x55, got {hex(acc4 >> 8)}"
 
     # --- Test 5: Re-enable accumulation with 1*1 ---
@@ -72,6 +83,10 @@ async def test_mac_spst_basic(dut):
     dut.ui_in.value = 1
     dut.uio_in.value = 1
     await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
 
-    acc5 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    acc5 = (safe_int(dut.uio_out) << 8) | safe_int(dut.uo_out)
     assert acc5 == (0x55 << 8) + 1, f"Expected 0x5501, got {hex(acc5)}"
+
+    # Done
+    await Timer(20, units="ns")
