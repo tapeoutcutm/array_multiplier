@@ -1,3 +1,62 @@
+/*
+ * Multiply-Accumulate with SPST Adder
+ * TinyTapeout wrapper
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+`default_nettype none
+
+// ============================================================
+// TinyTapeout wrapper
+// ============================================================
+module tt_um_mac_spst_tiny (
+    input  wire [7:0] ui_in,    // Operand A
+    output wire [7:0] uo_out,   // Accumulator low byte
+    input  wire [7:0] uio_in,   // Operand B / external input
+    output wire [7:0] uio_out,  // Accumulator high byte
+    output wire [7:0] uio_oe,   // Output enable
+    input  wire       ena,      // Chip enable
+    input  wire       clk,      // Clock
+    input  wire       rst_n     // Active-low reset
+);
+
+    // Internal signals
+    wire [7:0] out_low;
+    reg        io_drive_reg;
+    reg        load_ext_high_reg;
+
+    // Operand mapping
+    wire [7:0] operand_a = ui_in;
+    wire [7:0] operand_b = uio_in;
+
+    // Accumulate only when ena=1
+    wire acc_en = ena;
+
+    always @(*) begin
+        io_drive_reg      = ena;
+        load_ext_high_reg = ~ena;
+    end
+
+    // Core MAC
+    mac_spst_tiny dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .acc_en(acc_en),
+        .in_a(operand_a),
+        .in_b(operand_b),
+        .out_low(out_low),
+        .io_high(uio_in),
+        .io_drive(io_drive_reg),
+        .load_ext_high(load_ext_high_reg)
+    );
+
+    // Outputs
+    assign uo_out  = out_low;
+    assign uio_out = uio_in;               // bus connection
+    assign uio_oe  = {8{io_drive_reg}};
+
+endmodule
+
 // ============================================================
 // Core MAC with SPST Adder
 // ============================================================
@@ -33,11 +92,10 @@ module mac_spst_tiny (
 
     // Accumulator update
     always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+        if (!rst_n)
             acc <= 16'd0;
-        end else if (acc_en) begin
+        else if (acc_en)
             acc <= sum;
-        end
     end
 
     // External load of high byte when ena=0
@@ -73,5 +131,5 @@ module spst_adder16 (
     input  wire [15:0] b,
     output wire [15:0] sum
 );
-    assign sum = a + b; // Replace with SPST optimized logic if needed
+    assign sum = a + b; // simplified, can replace with SPST logic
 endmodule
