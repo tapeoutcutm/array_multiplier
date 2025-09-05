@@ -1,65 +1,58 @@
-`timescale 1ns / 1ps
-// -----------------------------------------------------------------
-// mac_spst_tiny.v
-// 8-bit Multiply-Accumulate with SPST adder, tri-state IO
-// Tiny Tapeout style module with 8-bit IO limit
-// -----------------------------------------------------------------
-module mac_spst_tiny (
-    input  wire        clk,
-    input  wire        rst_n,
-    input  wire        acc_en,        // enable accumulation (normal operation)
-    input  wire [7:0]  in_a,          // multiplier input a
-    input  wire [7:0]  in_b,          // multiplier input b
-    output wire [7:0]  out_low,       // lower byte of accumulator (always driven)
-    inout  wire [7:0]  io_high,       // upper byte of accumulator (bidirectional pad)
-    input  wire        io_drive,      // 1 = module drives io_high; 0 = tri-state (hi-z)
-    input  wire        load_ext_high // when 1 (and acc_en==0) capture external io_high into acc[15:8]
+/*
+ * MAC with SPST adder
+ * TinyTapeout wrapper
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+`default_nettype none
+
+module tt_um_mac_spst_tiny (
+    input  wire [7:0] ui_in,    // Dedicated inputs: operand A
+    output wire [7:0] uo_out,   // Dedicated outputs: accumulator low byte
+    input  wire [7:0] uio_in,   // IOs: input path (operand B / external high byte)
+    output wire [7:0] uio_out,  // IOs: output path (accumulator high byte)
+    output wire [7:0] uio_oe,   // IOs: enable path (1=drive high byte)
+    input  wire       ena,      // always 1 when powered
+    input  wire       clk,      // clock
+    input  wire       rst_n     // reset, active low
 );
 
-    // Internal accumulator register
-    reg  [15:0] acc_reg;
+    // Internal signals
+    wire [7:0] out_low;
+    reg        io_drive_reg;
+    reg        load_ext_high_reg;
 
-    wire [15:0] product;
-    wire [15:0] sum_next;
-    wire        carry_out_unused;
+    // Operand mapping
+    wire [7:0] operand_a = ui_in;
+    wire [7:0] operand_b = uio_in;
 
-    // 8x8 multiplier instance
-    array_mult8x8 u_mult (
-        .a(in_a),
-        .b(in_b),
-        .p(product)
-    );
+    // Control: 
+    // - accumulate when ena=1
+    // - drive high byte when ena=1
+    // - allow external load when ena=0
+    wire acc_en = ena;
 
-    // 16-bit SPST adder instance
-    spst_adder16 u_spst (
-        .a(acc_reg),
-        .b(product),
-        .sum(sum_next),
-        .carry_out(carry_out_unused)
-    );
-
-    // Drive lower byte output
-    assign out_low = acc_reg[7:0];
-
-    // Tri-state upper byte output
-    assign io_high = io_drive ? acc_reg[15:8] : 8'bz;
-
-    // Sample external pad when io_drive is low
-    wire [7:0] io_high_in;
-    assign io_high_in = io_high;
-
-    // Accumulator update on clock
-    always @(posedge clk) begin
-        if (!rst_n) begin
-            acc_reg <= 16'b0;
-        end else if (acc_en) begin
-            acc_reg <= sum_next;
-        end else if (load_ext_high) begin
-            acc_reg[15:8] <= io_high_in;
-            // lower byte unchanged
-        end else begin
-            acc_reg <= acc_reg;
-        end
+    always @(*) begin
+        io_drive_reg      = ena;
+        load_ext_high_reg = ~ena;
     end
+
+    // Instantiate the DUT
+    mac_spst_tiny dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .acc_en(acc_en),
+        .in_a(operand_a),
+        .in_b(operand_b),
+        .out_low(out_low),
+        .io_high(uio_in),
+        .io_drive(io_drive_reg),
+        .load_ext_high(load_ext_high_reg)
+    );
+
+    // Outputs
+    assign uo_out  = out_low;              // dedicated outputs = low byte
+    assign uio_out = uio_in;               // high byte bus
+    assign uio_oe  = {8{io_drive_reg}};    // enable only when DUT drives
 
 endmodule
