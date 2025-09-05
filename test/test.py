@@ -1,16 +1,17 @@
 import cocotb
 from cocotb.triggers import RisingEdge
 
+
 @cocotb.test()
 async def test_mac_spst_basic(dut):
     """Basic test for MAC SPST"""
     dut._log.info("Starting test...")
 
-    # Reset
-    dut.rst.value = 1
+    # Active-low Reset (asserted = 0, deasserted = 1)
+    dut.rst_n.value = 0
     for _ in range(2):
         await RisingEdge(dut.clk)
-    dut.rst.value = 0
+    dut.rst_n.value = 1
 
     # Apply inputs
     dut.a.value = 3
@@ -25,7 +26,7 @@ async def test_mac_spst_basic(dut):
     else:
         dut._log.info("✅ Test passed correctly")
 
-    # You can add more vectors
+    # More vectors
     dut.a.value = 5
     dut.b.value = 6
     await RisingEdge(dut.clk)
