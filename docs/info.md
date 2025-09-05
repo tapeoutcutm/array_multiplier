@@ -1,20 +1,8 @@
-<!---
-
-This file is used to generate your project datasheet. Please fill in the information below and delete any unused
-sections.
-
-You can also include images in this folder and reference them in the markdown. Each image must be less than
-512 kb in size, and the combined size of all images must be less than 1 MB.
--->
-
 ## How it works
-
-Explain how your project works
+This project implements an 8-bit Multiply-Accumulate (MAC) unit with a specialized 16-bit adder called SPST (Split into lower and upper 8-bit portions) for efficient addition. The multiplier takes two 8-bit inputs and produces a 16-bit product, which is accumulated in an internal 16-bit register. The lower 8 bits of the accumulator are continuously output on dedicated pins, while the upper 8 bits are exposed via a bidirectional IO bus that can be driven by the module or externally overridden. The design supports accumulation control and external loading of the upper byte, providing flexibility for cascaded or partial updates. This architecture is optimized for Tiny Tapeout’s limited IO pin count and minimal area.
 
 ## How to test
-
-Explain how to use your project
+To test the project, apply clock and reset signals to the module along with valid 8-bit inputs for the multiplier inputs (`in_a` and `in_b`). Enable accumulation to add the product to the current accumulator value. Observe the lower 8 bits on the output pins continuously. To verify external load functionality, release control of the upper byte IO bus, drive a new value externally, and trigger the load signal. Simulation testbenches and Cocotb tests can be used to verify accumulation, reset, and external load behaviors. Waveform dumps (VCD files) help analyze timing and functional correctness at the signal level.
 
 ## External hardware
-
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+This project does not require any external hardware beyond a basic clock and reset source for simulation or prototype testing. It is designed as a compact IP block for ASIC tapeouts on the Tiny Tapeout platform, which provides the silicon process and packaging. For physical testing, integration with a microcontroller or FPGA development board with appropriate IO access may be needed to drive inputs and observe outputs externally.
