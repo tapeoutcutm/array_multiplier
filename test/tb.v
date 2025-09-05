@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-module tb_tt_um_mac_spst_tiny;
+module tb;
 
     // DUT I/O
     reg  [7:0] ui_in;     // operand A
