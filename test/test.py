@@ -1,78 +1,77 @@
-# SPDX-License-Identifier: Apache-2.0
 import cocotb
-from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles
+from cocotb.triggers import RisingEdge, Timer
+
+
+async def reset_dut(dut, cycles=5):
+    """Reset helper."""
+    dut.rst_n.value = 0
+    await Timer(1, units="ns")
+    for _ in range(cycles):
+        await RisingEdge(dut.clk)
+    dut.rst_n.value = 1
+    await RisingEdge(dut.clk)
+
 
 @cocotb.test()
-async def test_mac_spst_tiny(dut):
-    dut._log.info("Starting mac_spst_tiny test")
+async def test_mac_spst_basic(dut):
+    """Test MAC with SPST adder in TinyTapeout wrapper."""
 
-    # Setup clock: 10ns period
-    clock = Clock(dut.clk, 10, units="ns")
-    cocotb.start_soon(clock.start())
+    # Init
+    dut.ui_in.value = 0
+    dut.uio_in.value = 0
+    dut.ena.value = 1
+    dut.clk.value = 0
 
-    # Reset active low
-    dut.rst_n.value = 0
-    dut.acc_en.value = 0
-    dut.io_drive.value = 1
-    dut.load_ext_high.value = 0
-    dut.in_a.value = 0
-    dut.in_b.value = 0
-    await ClockCycles(dut.clk, 5)
-    dut.rst_n.value = 1
+    # Clock generator
+    async def clk_gen():
+        while True:
+            dut.clk.value = 0
+            await Timer(5, units="ns")
+            dut.clk.value = 1
+            await Timer(5, units="ns")
 
-    # Helper: safe assert with unknown check
-    def safe_assert(expected, actual, label):
-        if 'x' in str(actual):
-            dut._log.warning(f"{label}: out_low contains unknown bits: {actual}")
-        else:
-            assert actual.integer == expected, f"{label}: Expected {expected}, got {actual.integer}"
+    cocotb.start_soon(clk_gen())
 
-    # Test 1: accumulate a few products
-    dut.acc_en.value = 1
-    dut.in_a.value = 3
-    dut.in_b.value = 4
-    await ClockCycles(dut.clk, 1)  # acc = 12
-    dut.in_a.value = 2
-    dut.in_b.value = 5
-    await ClockCycles(dut.clk, 1)  # acc += 10 -> 22
-    dut.in_a.value = 100
-    dut.in_b.value = 2
-    await ClockCycles(dut.clk, 1)  # acc += 200 -> 222
-    dut.acc_en.value = 0
-    await ClockCycles(dut.clk, 1)
+    # Reset
+    await reset_dut(dut)
 
-    safe_assert(222 & 0xFF, dut.out_low.value, "Accumulated Low Byte")
+    # --- Test 1: Multiply 3 * 4 ---
+    dut.ui_in.value = 3
+    dut.uio_in.value = 4
+    await RisingEdge(dut.clk)
 
-    # Test 2: release io drive and load external high byte 0xAA
-    dut.io_drive.value = 0
-    dut.load_ext_high.value = 0
-    dut.in_a.value = 0
-    dut.in_b.value = 0
-    # External drives io_high, model by force driving via cocotb (if supported)
-    # Since io_high is inout, we simulate external driving via force on io_high signal
-    dut._log.info("Simulate external drive of io_high with 0xAA")
-    dut._log.info("Set load_ext_high to latch external value on next clk")
+    acc1 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    assert acc1 == 12, f"Expected 12, got {acc1}"
 
-    # To simulate external drive on inout, use cocotb's force/release (optional)
-    dut.io_high <= 0xAA
-    await ClockCycles(dut.clk,1)
-    dut.load_ext_high.value = 1
-    await ClockCycles(dut.clk,1)
-    dut.load_ext_high.value = 0
+    # --- Test 2: Add 2 * 5 ---
+    dut.ui_in.value = 2
+    dut.uio_in.value = 5
+    await RisingEdge(dut.clk)
 
-    # Let module drive again
-    dut.io_drive.value = 1
-    await ClockCycles(dut.clk,1)
+    acc2 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    assert acc2 == 12 + 10, f"Expected 22, got {acc2}"
 
-    # Check high byte of acc_reg (internally read via io_high output)
-    out_val = (int(dut.out_low.value) | (0xAA << 8)) & 0xFFFF
-    dut._log.info(f"Expected acc high byte = 0xAA; out_low = {dut.out_low.value}")
-    # We only directly observe out_low; internal acc_reg upper byte is not exposed,
-    # but after re-enabling drive, io_high should reflect 0xAA; so testing that:
-    if dut.io_high.value.is_resolvable:
-        assert dut.io_high.value.integer == 0xAA, f"High byte expected 0xAA, got {dut.io_high.value.integer}"
-    else:
-        dut._log.warning(f"io_high has unresolved value: {dut.io_high.value}")
+    # --- Test 3: Add 10 * 10 ---
+    dut.ui_in.value = 10
+    dut.uio_in.value = 10
+    await RisingEdge(dut.clk)
 
-    dut._log.info("All test cases passed.")
+    acc3 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    assert acc3 == 22 + 100, f"Expected 122, got {acc3}"
+
+    # --- Test 4: Disable accumulation and load external high byte ---
+    dut.ena.value = 0
+    dut.uio_in.value = 0x55
+    await RisingEdge(dut.clk)
+
+    acc4 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    assert (acc4 >> 8) == 0x55, f"Expected high byte 0x55, got {hex(acc4 >> 8)}"
+
+    # --- Test 5: Re-enable accumulation with 1*1 ---
+    dut.ena.value = 1
+    dut.ui_in.value = 1
+    dut.uio_in.value = 1
+    await RisingEdge(dut.clk)
+
+    acc5 = (int(dut.uio_out.value) << 8) | int(dut.uo_out.value)
+    assert acc5 == (0x55 << 8) + 1, f"Expected 0x5501, got {hex(acc5)}"
