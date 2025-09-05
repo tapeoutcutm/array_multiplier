@@ -1,6 +1,4 @@
 # Makefile
-# RTL testbench with tb.v and combined project.v
-
 SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
@@ -10,8 +8,7 @@ ifneq ($(GATES),yes)
 
 # RTL simulation
 SIM_BUILD        = sim_build/rtl
-VERILOG_SOURCES += $(SRC_DIR)/$(PROJECT_SOURCES) \
-                   $(PWD)/tb.v
+VERILOG_SOURCES += $(SRC_DIR)/$(PROJECT_SOURCES)
 
 else
 
@@ -31,11 +28,10 @@ endif
 # Allow sharing configuration between design and testbench via `include`
 COMPILE_ARGS    += -I$(SRC_DIR)
 
-# Top module is your Verilog testbench
-TOPLEVEL = tb
+# DUT top-level for cocotb
+TOPLEVEL = tt_um_mac_spst_tiny
 
-# MODULE is the basename of the Python test file (used if you also want cocotb)
+# Python testbench module
 MODULE = test
 
-# Include cocotb rules
 include $(shell cocotb-config --makefiles)/Makefile.sim
