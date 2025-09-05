@@ -32,6 +32,8 @@ jobs:
   gl_test:
     needs: gds
     runs-on: ubuntu-24.04
+    env:
+      COCOTB_RESOLVE_X: ZEROS   # Handle X/Z values safely
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
@@ -42,6 +44,16 @@ jobs:
         uses: TinyTapeout/tt-gds-action/gl_test@ttsky25a
         with:
           pdk: sky130
+
+      - name: Upload artifacts
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gl-test-results
+          path: |
+            test/results.xml
+            test/tb.vcd
+            test/output/*
 
   viewer:
     needs: gds
