@@ -1,6 +1,6 @@
 # Tiny Tapeout project information
 project:
-  title:        "8-bit Multiply-Accumulate with SPST Adder"
+  title:        "Low Power and Enhanced Speed Multiplier, Accumulator with SPST Adder"
   author:       "tinytapeout cutm"
   discord:      ""                      # Optional: your Discord username
   description:  "Multiply-accumulate unit with tri-state upper byte IO for Tiny Tapeout"
